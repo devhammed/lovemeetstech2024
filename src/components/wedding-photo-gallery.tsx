@@ -13,10 +13,16 @@ const appTitle = import.meta.env.VITE_APP_TITLE;
 
 const maxResults = parseInt(import.meta.env.VITE_PHOTOS_PER_PAGE, 10);
 
+interface PhotoItem {
+  url: string;
+  name: string;
+  storageRef: StorageReference;
+}
+
 export function WeddingPhotoGalleryComponent() {
   const [email, setEmail] = useState<string>('')
   const [user, setUser] = useState<User|null>(null)
-  const [photos, setPhotos] = useState<{ url: string, storageRef: StorageReference }[]>([])
+  const [photos, setPhotos] = useState<PhotoItem[]>([])
   const [loading, setLoading] = useState<boolean>(false)
   const [sendingSignInLink, setSendingSignInLink] = useState<boolean>(false)
   const [hasMore, setHasMore] = useState<boolean>(true)
@@ -125,10 +131,10 @@ export function WeddingPhotoGalleryComponent() {
       const res = await list(listRef, { maxResults, pageToken });
 
       const items = await Promise.all(res.items.map(storageRef => {
-        return new Promise<{ url: string, storageRef: StorageReference }>((resolve, reject) => {
+        return new Promise<PhotoItem>((resolve, reject) => {
             getDownloadURL(storageRef)
                 .then(url => {
-                  resolve({ url, storageRef });
+                  resolve({ url, storageRef, name: storageRef.name });
                 })
                 .catch(error => {
                   reject(error);
@@ -151,7 +157,9 @@ export function WeddingPhotoGalleryComponent() {
 
   const uploadImage = async (file: File) => {
     try {
-      const storageRef = ref(storage, `photos/${Date.now()}_${file.name}`);
+      const name = `${Date.now()}_${file.name}`;
+
+      const storageRef = ref(storage, `photos/${name}`);
 
       await toast.promise(uploadBytes(storageRef, file), {
         loading: 'Uploading image...',
@@ -161,7 +169,7 @@ export function WeddingPhotoGalleryComponent() {
 
       const url = await getDownloadURL(storageRef);
 
-      setPhotos((prevPhotos) => [{url, storageRef}, ...prevPhotos]);
+      setPhotos((prevPhotos) => [{url, name, storageRef}, ...prevPhotos]);
     } catch (error) {
       console.error('Error uploading image', error);
       toast.error('Error uploading image. Please try again.');
@@ -191,9 +199,9 @@ export function WeddingPhotoGalleryComponent() {
     setIsModalOpen(false);
   };
 
-  const handleDownload = async (ref: StorageReference) => {
+  const handleDownload = async (photo: PhotoItem) => {
       try {
-        const blob = await toast.promise(getBlob(ref), {
+        const blob = await toast.promise(getBlob(photo.storageRef), {
             loading: 'Downloading image...',
             success: 'Image downloaded successfully!',
             error: 'Error downloading image. Please try again.'
@@ -201,7 +209,7 @@ export function WeddingPhotoGalleryComponent() {
         const blobUrl = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = blobUrl;
-        a.download = 'wedding-photo.jpg';
+        a.download = photo.name;
         a.click();
       } catch (error) {
         console.error('Error downloading image', error);
@@ -303,17 +311,17 @@ export function WeddingPhotoGalleryComponent() {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {photos.map((photo, index) => (
             <div
-              key={photo.url}
+              key={photo.name}
               className="relative group overflow-hidden rounded-lg shadow-lg transition-transform duration-300 ease-in-out hover:scale-105"
               ref={index === photos.length - 1 ? lastPhotoElementRef : null}
             >
               <img
                 src={photo.url}
-                alt={`Wedding Photo ${index + 1}`}
+                alt={photo.name}
                 className="w-full h-64 object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-blue-600/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-center pb-4">
-                <button type="button" onClick={() => handleDownload(photo.storageRef)}>
+                <button type="button" onClick={() => handleDownload(photo)}>
                   <Download className="text-white h-8 w-8" />
                 </button>
               </div>
