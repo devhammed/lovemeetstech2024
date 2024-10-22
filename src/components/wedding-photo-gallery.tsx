@@ -148,12 +148,10 @@ export function WeddingPhotoGalleryComponent() {
   const handleModalSubmit = useCallback(async  (e: FormEvent) => {
     e.preventDefault();
 
-    try {
-      await completeSignIn(modalEmail);
-    } catch (error) {
-      console.error('Error completing sign-in', error);
-      toast.error('Error completing sign-in. Please try again.');
-    }
+    completeSignIn(modalEmail).catch(error => {
+        console.error('Error completing sign-in', error);
+        toast.error('Error completing sign-in. Please try again.');
+    });
 
     setIsModalOpen(false);
   }, [completeSignIn, modalEmail]);
