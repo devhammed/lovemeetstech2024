@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  base: '/love-meets-tech-2024',
+  base: '/lovemeetstech2024',
   build: {
     outDir: 'docs',
   },
