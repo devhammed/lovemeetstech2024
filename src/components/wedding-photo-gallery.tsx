@@ -81,10 +81,13 @@ export function WeddingPhotoGalleryComponent() {
   const completeSignIn = async (email: string) => {
     try {
       const result = await signInWithEmailLink(auth, email, window.location.href)
-      const user = result.user;
+
       window.localStorage.removeItem('emailForSignIn');
+
       window.history.replaceState({}, document.title, window.location.pathname);
-      setUser(user);
+
+      setUser(result.user);
+
       toast.success('Successfully signed in!')
     } catch (error) {
       console.error('Error signing in with email link', error)
