@@ -115,6 +115,10 @@ export function WeddingPhotoGalleryComponent() {
   }
 
   const fetchPhotos = async () => {
+    if (!hasMore || loading) {
+        return;
+    }
+
     setLoading(true)
 
     try {
