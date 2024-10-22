@@ -20,16 +20,165 @@ interface PhotoItem {
 }
 
 export function WeddingPhotoGalleryComponent() {
-  const [email, setEmail] = useState<string>('')
-  const [user, setUser] = useState<User|null>(null)
-  const [photos, setPhotos] = useState<PhotoItem[]>([])
-  const [loading, setLoading] = useState<boolean>(false)
-  const [sendingSignInLink, setSendingSignInLink] = useState<boolean>(false)
-  const [hasMore, setHasMore] = useState<boolean>(true)
+  const [email, setEmail] = useState<string>('');
+
+  const [user, setUser] = useState<User|null>(null);
+
+  const [photos, setPhotos] = useState<PhotoItem[]>([]);
+
+  const [loading, setLoading] = useState<boolean>(false);
+
+  const [sendingSignInLink, setSendingSignInLink] = useState<boolean>(false);
+
+  const [hasMore, setHasMore] = useState<boolean>(true);
+
   const [pageToken, setPageToken] = useState<string|undefined>();
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [modalEmail, setModalEmail] = useState<string>('')
-  const observer = useRef<IntersectionObserver>()
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const [modalEmail, setModalEmail] = useState<string>('');
+
+  const observer = useRef<IntersectionObserver>();
+
+  const completeSignIn = useCallback(async (email: string) => {
+    try {
+      const result = await signInWithEmailLink(auth, email, window.location.href)
+
+      window.localStorage.removeItem('emailForSignIn');
+
+      window.history.replaceState({}, document.title, window.location.pathname);
+
+      setUser(result.user);
+
+      toast.success('Successfully signed in!');
+    } catch (error) {
+      console.error('Error signing in with email link', error);
+      toast.error('Error signing in. Please try again.');
+    }
+  }, [setUser]);
+
+  const sendSignInLink = useCallback(async (e: FormEvent) => {
+    e.preventDefault();
+
+    setSendingSignInLink(true);
+
+    try {
+      await sendSignInLinkToEmail(auth, email, {
+        url: window.location.href,
+        handleCodeInApp: true,
+      });
+
+      window.localStorage.setItem('emailForSignIn', email);
+
+      toast.success('Sign-in link sent to your email!');
+    } catch (error) {
+      console.error('Error sending sign-in link', error);
+      toast.error('Error sending sign-in link. Please try again.');
+    }
+
+    setSendingSignInLink(false);
+  }, [email, setSendingSignInLink]);
+
+  const fetchPhotos = useCallback(async () => {
+    setLoading(true);
+
+    try {
+      const listRef = ref(storage, 'photos');
+
+      const res = await list(listRef, { maxResults, pageToken });
+
+      const items = await Promise.all(res.items.map(storageRef => {
+        return new Promise<PhotoItem>((resolve, reject) => {
+          getDownloadURL(storageRef)
+              .then(url => {
+                resolve({ url, storageRef, name: storageRef.name });
+              })
+              .catch(error => {
+                reject(error);
+              });
+        });
+      }));
+
+      setPhotos((prevPhotos) => pageToken ? [...prevPhotos, ...items] : items);
+
+      setPageToken(res.nextPageToken);
+
+      setHasMore(!!res.nextPageToken);
+    } catch (error) {
+      console.error('Error fetching photos', error);
+      toast.error('Error fetching photos. Please try again.');
+    }
+
+    setLoading(false);
+  }, [pageToken, setPhotos, setPageToken, setHasMore, setLoading]);
+
+  const uploadImage = useCallback(async (file: File) => {
+    try {
+      const name = `${Date.now()}_${file.name}`;
+
+      const storageRef = ref(storage, `photos/${name}`);
+
+      await toast.promise(uploadBytes(storageRef, file), {
+        loading: 'Uploading image...',
+        success: 'Image uploaded successfully!',
+        error: 'Error uploading image. Please try again.'
+      });
+
+      const url = await getDownloadURL(storageRef);
+
+      setPhotos((prevPhotos) => [{url, name, storageRef}, ...prevPhotos]);
+    } catch (error) {
+      console.error('Error uploading image', error);
+      toast.error('Error uploading image. Please try again.');
+    }
+  }, [setPhotos]);
+
+  const handleFileUpload = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files![0];
+
+    if (!file) {
+      return;
+    }
+
+    await uploadImage(file);
+  }, [uploadImage]);
+
+  const handleModalSubmit = useCallback(async  (e: FormEvent) => {
+    e.preventDefault();
+
+    try {
+      await completeSignIn(modalEmail);
+    } catch (error) {
+      console.error('Error completing sign-in', error);
+      toast.error('Error completing sign-in. Please try again.');
+    }
+
+    setIsModalOpen(false);
+  }, [completeSignIn, modalEmail]);
+
+  const handleDownload = useCallback(async (photo: PhotoItem) => {
+    try {
+      const blob = await toast.promise(getBlob(photo.storageRef), {
+        loading: 'Downloading image...',
+        success: 'Image downloaded successfully!',
+        error: 'Error downloading image. Please try again.'
+      });
+
+      const blobUrl = URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+
+      a.href = blobUrl;
+
+      a.download = photo.name;
+
+      a.click();
+    } catch (error) {
+      console.error('Error downloading image', error);
+      toast.error('Error downloading image. Please try again.');
+    }
+  }, []);
+
   const lastPhotoElementRef = useCallback((node: HTMLDivElement) => {
     if (loading) {
       return;
@@ -51,7 +200,7 @@ export function WeddingPhotoGalleryComponent() {
     if (node) {
       observer.current.observe(node);
     }
-  }, [loading, hasMore]);
+  }, [loading, hasMore, fetchPhotos]);
 
   useEffect(() => {
     if (isSignInWithEmailLink(auth, window.location.href)) {
@@ -66,7 +215,7 @@ export function WeddingPhotoGalleryComponent() {
          });
       }
     }
-  }, []);
+  }, [completeSignIn, setIsModalOpen]);
 
   useEffect(() => {
     const authStateSubscription = auth.onAuthStateChanged((user) => {
@@ -81,141 +230,7 @@ export function WeddingPhotoGalleryComponent() {
     }
 
     return authStateSubscription;
-  }, [user]);
-
-  const completeSignIn = async (email: string) => {
-    try {
-      const result = await signInWithEmailLink(auth, email, window.location.href)
-
-      window.localStorage.removeItem('emailForSignIn');
-
-      window.history.replaceState({}, document.title, window.location.pathname);
-
-      setUser(result.user);
-
-      toast.success('Successfully signed in!');
-    } catch (error) {
-      console.error('Error signing in with email link', error);
-      toast.error('Error signing in. Please try again.');
-    }
-  };
-
-  const sendSignInLink = async (e: FormEvent) => {
-    e.preventDefault();
-
-    setSendingSignInLink(true);
-
-    try {
-      await sendSignInLinkToEmail(auth, email, {
-        url: window.location.href,
-        handleCodeInApp: true,
-      });
-
-      window.localStorage.setItem('emailForSignIn', email);
-
-      toast.success('Sign-in link sent to your email!');
-    } catch (error) {
-      console.error('Error sending sign-in link', error);
-      toast.error('Error sending sign-in link. Please try again.');
-    }
-
-    setSendingSignInLink(false);
-  }
-
-  const fetchPhotos = async () => {
-    setLoading(true);
-
-    try {
-      const listRef = ref(storage, 'photos');
-
-      const res = await list(listRef, { maxResults, pageToken });
-
-      const items = await Promise.all(res.items.map(storageRef => {
-        return new Promise<PhotoItem>((resolve, reject) => {
-            getDownloadURL(storageRef)
-                .then(url => {
-                  resolve({ url, storageRef, name: storageRef.name });
-                })
-                .catch(error => {
-                  reject(error);
-                });
-        });
-      }));
-
-      setPhotos((prevPhotos) => pageToken ? [...prevPhotos, ...items] : items);
-
-      setPageToken(res.nextPageToken);
-
-      setHasMore(!!res.nextPageToken);
-    } catch (error) {
-      console.error('Error fetching photos', error);
-      toast.error('Error fetching photos. Please try again.');
-    }
-
-    setLoading(false);
-  }
-
-  const uploadImage = async (file: File) => {
-    try {
-      const name = `${Date.now()}_${file.name}`;
-
-      const storageRef = ref(storage, `photos/${name}`);
-
-      await toast.promise(uploadBytes(storageRef, file), {
-        loading: 'Uploading image...',
-        success: 'Image uploaded successfully!',
-        error: 'Error uploading image. Please try again.'
-      });
-
-      const url = await getDownloadURL(storageRef);
-
-      setPhotos((prevPhotos) => [{url, name, storageRef}, ...prevPhotos]);
-    } catch (error) {
-      console.error('Error uploading image', error);
-      toast.error('Error uploading image. Please try again.');
-    }
-  };
-
-  const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files![0];
-
-    if (!file) {
-        return;
-    }
-
-    await uploadImage(file);
-  };
-
-  const handleModalSubmit = async  (e: FormEvent) => {
-    e.preventDefault();
-
-    try {
-      await completeSignIn(modalEmail);
-    } catch (error) {
-        console.error('Error completing sign-in', error);
-        toast.error('Error completing sign-in. Please try again.');
-    }
-
-    setIsModalOpen(false);
-  };
-
-  const handleDownload = async (photo: PhotoItem) => {
-      try {
-        const blob = await toast.promise(getBlob(photo.storageRef), {
-            loading: 'Downloading image...',
-            success: 'Image downloaded successfully!',
-            error: 'Error downloading image. Please try again.'
-        });
-        const blobUrl = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = photo.name;
-        a.click();
-      } catch (error) {
-        console.error('Error downloading image', error);
-        toast.error('Error downloading image. Please try again.');
-      }
-  };
+  }, [fetchPhotos, user]);
 
   if (!user) {
     return (
