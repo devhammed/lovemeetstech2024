@@ -1,15 +1,14 @@
 import { useState, useEffect, useRef, useCallback, FormEvent, ChangeEvent } from 'react'
 import { User } from 'firebase/auth'
 import { sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink } from 'firebase/auth'
-import { ref, list, getDownloadURL, uploadBytes } from 'firebase/storage'
+import { ref, list, getDownloadURL, getBlob, uploadBytes, StorageReference } from 'firebase/storage'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
 import { Toaster, toast } from 'react-hot-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
-import { Heart, Upload } from 'lucide-react'
+import {Download, Upload} from 'lucide-react'
 import { auth, storage } from '@/lib/firebase'
-
 const appTitle = import.meta.env.VITE_APP_TITLE;
 
 const maxResults = parseInt(import.meta.env.VITE_PHOTOS_PER_PAGE, 10);
@@ -17,7 +16,7 @@ const maxResults = parseInt(import.meta.env.VITE_PHOTOS_PER_PAGE, 10);
 export function WeddingPhotoGalleryComponent() {
   const [email, setEmail] = useState<string>('')
   const [user, setUser] = useState<User|null>(null)
-  const [photos, setPhotos] = useState<string[]>([])
+  const [photos, setPhotos] = useState<{ url: string, storageRef: StorageReference }[]>([])
   const [loading, setLoading] = useState<boolean>(false)
   const [sendingSignInLink, setSendingSignInLink] = useState<boolean>(false)
   const [hasMore, setHasMore] = useState<boolean>(true)
@@ -125,9 +124,19 @@ export function WeddingPhotoGalleryComponent() {
 
       const res = await list(listRef, { maxResults, pageToken });
 
-      const urls = await Promise.all(res.items.map(itemRef => getDownloadURL(itemRef)));
+      const items = await Promise.all(res.items.map(storageRef => {
+        return new Promise<{ url: string, storageRef: StorageReference }>((resolve, reject) => {
+            getDownloadURL(storageRef)
+                .then(url => {
+                  resolve({ url, storageRef });
+                })
+                .catch(error => {
+                  reject(error);
+                });
+        });
+      }));
 
-      setPhotos((prevPhotos) => pageToken ? [...prevPhotos, ...urls] : urls);
+      setPhotos((prevPhotos) => pageToken ? [...prevPhotos, ...items] : items);
 
       setPageToken(res.nextPageToken);
 
@@ -152,12 +161,12 @@ export function WeddingPhotoGalleryComponent() {
 
       const url = await getDownloadURL(storageRef);
 
-      setPhotos((prevPhotos) => [url, ...prevPhotos]);
+      setPhotos((prevPhotos) => [{url, storageRef}, ...prevPhotos]);
     } catch (error) {
       console.error('Error uploading image', error);
       toast.error('Error uploading image. Please try again.');
     }
-  }
+  };
 
   const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files![0];
@@ -167,7 +176,7 @@ export function WeddingPhotoGalleryComponent() {
     }
 
     await uploadImage(file);
-  }
+  };
 
   const handleModalSubmit = async  (e: FormEvent) => {
     e.preventDefault();
@@ -180,7 +189,25 @@ export function WeddingPhotoGalleryComponent() {
     }
 
     setIsModalOpen(false);
-  }
+  };
+
+  const handleDownload = async (ref: StorageReference) => {
+      try {
+        const blob = await toast.promise(getBlob(ref), {
+            loading: 'Downloading image...',
+            success: 'Image downloaded successfully!',
+            error: 'Error downloading image. Please try again.'
+        });
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = 'wedding-photo.jpg';
+        a.click();
+      } catch (error) {
+        console.error('Error downloading image', error);
+        toast.error('Error downloading image. Please try again.');
+      }
+  };
 
   if (!user) {
     return (
@@ -241,7 +268,7 @@ export function WeddingPhotoGalleryComponent() {
 
         <Toaster position="bottom-center"/>
       </div>
-    )
+    );
   }
 
   return (
@@ -274,19 +301,21 @@ export function WeddingPhotoGalleryComponent() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-          {photos.map((url, index) => (
+          {photos.map((photo, index) => (
             <div
-              key={url}
+              key={photo.url}
               className="relative group overflow-hidden rounded-lg shadow-lg transition-transform duration-300 ease-in-out hover:scale-105"
               ref={index === photos.length - 1 ? lastPhotoElementRef : null}
             >
               <img
-                src={url}
+                src={photo.url}
                 alt={`Wedding Photo ${index + 1}`}
                 className="w-full h-64 object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-blue-600/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-center pb-4">
-                <Heart className="text-white h-8 w-8" />
+                <button type="button" onClick={() => handleDownload(photo.storageRef)}>
+                  <Download className="text-white h-8 w-8" />
+                </button>
               </div>
             </div>
           ))}
@@ -309,5 +338,5 @@ export function WeddingPhotoGalleryComponent() {
 
       <Toaster position="bottom-center"/>
     </div>
-  )
+  );
 }
