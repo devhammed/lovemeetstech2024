@@ -50,14 +50,14 @@ export function WeddingPhotoGalleryComponent() {
 
   useEffect(() => {
     if (isSignInWithEmailLink(auth, window.location.href)) {
-      const email = window.localStorage.getItem('emailForSignIn')
+      const email = window.localStorage.getItem('emailForSignIn');
 
       if (!email) {
-        setIsModalOpen(true)
+        setIsModalOpen(true);
       } else {
          completeSignIn(email).catch(error => {
-            console.error('Error completing sign-in', error)
-            toast.error('Error completing sign-in. Please try again.')
+            console.error('Error completing sign-in', error);
+            toast.error('Error completing sign-in. Please try again.');
          });
       }
     }
@@ -65,13 +65,13 @@ export function WeddingPhotoGalleryComponent() {
 
   useEffect(() => {
     const authStateSubscription = auth.onAuthStateChanged((user) => {
-        setUser(user)
+        setUser(user);
     });
 
     if (user) {
       fetchPhotos().catch(error => {
-        console.error('Error fetching photos', error)
-        toast.error('Error fetching photos. Please try again.')
+        console.error('Error fetching photos', error);
+        toast.error('Error fetching photos. Please try again.');
       });
     }
 
@@ -88,33 +88,33 @@ export function WeddingPhotoGalleryComponent() {
 
       setUser(result.user);
 
-      toast.success('Successfully signed in!')
+      toast.success('Successfully signed in!');
     } catch (error) {
-      console.error('Error signing in with email link', error)
-      toast.error('Error signing in. Please try again.')
+      console.error('Error signing in with email link', error);
+      toast.error('Error signing in. Please try again.');
     }
   };
 
   const sendSignInLink = async (e: FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
 
-    setSendingSignInLink(true)
+    setSendingSignInLink(true);
 
     try {
       await sendSignInLinkToEmail(auth, email, {
         url: window.location.href,
         handleCodeInApp: true,
-      })
+      });
 
-      window.localStorage.setItem('emailForSignIn', email)
+      window.localStorage.setItem('emailForSignIn', email);
 
-      toast.success('Sign-in link sent to your email!')
+      toast.success('Sign-in link sent to your email!');
     } catch (error) {
-      console.error('Error sending sign-in link', error)
-      toast.error('Error sending sign-in link. Please try again.')
+      console.error('Error sending sign-in link', error);
+      toast.error('Error sending sign-in link. Please try again.');
     }
 
-    setSendingSignInLink(false)
+    setSendingSignInLink(false);
   }
 
   const fetchPhotos = async () => {
@@ -142,7 +142,7 @@ export function WeddingPhotoGalleryComponent() {
 
   const uploadImage = async (file: File) => {
     try {
-      const storageRef = ref(storage, `photos/${Date.now()}_${file.name}`)
+      const storageRef = ref(storage, `photos/${Date.now()}_${file.name}`);
 
       await toast.promise(uploadBytes(storageRef, file), {
         loading: 'Uploading image...',
@@ -155,7 +155,7 @@ export function WeddingPhotoGalleryComponent() {
       setPhotos((prevPhotos) => [url, ...prevPhotos]);
     } catch (error) {
       console.error('Error uploading image', error);
-      toast.error('Error uploading image. Please try again.')
+      toast.error('Error uploading image. Please try again.');
     }
   }
 
@@ -170,16 +170,16 @@ export function WeddingPhotoGalleryComponent() {
   }
 
   const handleModalSubmit = async  (e: FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
 
     try {
-      await completeSignIn(modalEmail)
+      await completeSignIn(modalEmail);
     } catch (error) {
-        console.error('Error completing sign-in', error)
-        toast.error('Error completing sign-in. Please try again.')
+        console.error('Error completing sign-in', error);
+        toast.error('Error completing sign-in. Please try again.');
     }
 
-    setIsModalOpen(false)
+    setIsModalOpen(false);
   }
 
   if (!user) {
@@ -216,7 +216,7 @@ export function WeddingPhotoGalleryComponent() {
         </Card>
 
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-          <DialogContent className="bg-white/80 backdrop-blur-md border border-blue-200">
+          <DialogContent className="bg-white/80 backdrop-blur-sm border border-blue-200">
             <DialogHeader>
               <DialogTitle className="text-2xl font-bold text-blue-800">Confirm Your Email</DialogTitle>
               <DialogDescription className="text-blue-600">
