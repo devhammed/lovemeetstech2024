@@ -118,30 +118,26 @@ export function WeddingPhotoGalleryComponent() {
   }
 
   const fetchPhotos = async () => {
-    if (!hasMore || loading) {
-        return;
-    }
-
-    setLoading(true)
+    setLoading(true);
 
     try {
-      const listRef = ref(storage, 'photos')
+      const listRef = ref(storage, 'photos');
 
-      const res = await list(listRef, { maxResults, pageToken })
+      const res = await list(listRef, { maxResults, pageToken });
 
-      const urls = await Promise.all(res.items.map(itemRef => getDownloadURL(itemRef)))
+      const urls = await Promise.all(res.items.map(itemRef => getDownloadURL(itemRef)));
 
-      setPhotos((prevPhotos) => pageToken ? [...prevPhotos, ...urls] : urls)
+      setPhotos((prevPhotos) => pageToken ? [...prevPhotos, ...urls] : urls);
 
-      setPageToken(res.nextPageToken)
+      setPageToken(res.nextPageToken);
 
       setHasMore(!!res.nextPageToken);
     } catch (error) {
-      console.error('Error fetching photos', error)
-      toast.error('Error fetching photos. Please try again.')
+      console.error('Error fetching photos', error);
+      toast.error('Error fetching photos. Please try again.');
     }
 
-    setLoading(false)
+    setLoading(false);
   }
 
   const uploadImage = async (file: File) => {
