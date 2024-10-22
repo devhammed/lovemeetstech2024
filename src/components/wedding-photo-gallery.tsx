@@ -179,7 +179,7 @@ export function WeddingPhotoGalleryComponent() {
     }
   }, []);
 
-  const lastPhotoElementRef = useCallback((node: HTMLDivElement) => {
+  const infiniteScrollRef = useCallback((node: HTMLDivElement) => {
     if (loading) {
       return;
     }
@@ -324,11 +324,10 @@ export function WeddingPhotoGalleryComponent() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-          {photos.map((photo, index) => (
+          {photos.map((photo) => (
             <div
               key={photo.name}
               className="relative group overflow-hidden rounded-lg shadow-lg transition-transform duration-300 ease-in-out hover:scale-105"
-              ref={index === photos.length - 1 ? lastPhotoElementRef : null}
             >
               <img
                 src={photo.url}
@@ -343,6 +342,8 @@ export function WeddingPhotoGalleryComponent() {
             </div>
           ))}
         </div>
+
+        <div ref={infiniteScrollRef} className="h-4"></div>
 
         {loading && (
             <p className="text-center mt-4 text-blue-600">
