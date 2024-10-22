@@ -42,15 +42,17 @@ export function WeddingPhotoGalleryComponent() {
 
   const completeSignIn = useCallback(async (email: string) => {
     try {
-      const result = await signInWithEmailLink(auth, email, window.location.href)
+      const result = await toast.promise(signInWithEmailLink(auth, email, window.location.href), {
+        loading: 'Signing in...',
+        success: 'Successfully signed in!',
+        error: 'Error signing in. Please try again.'
+      });
 
       window.localStorage.removeItem('emailForSignIn');
 
       window.history.replaceState({}, document.title, window.location.pathname);
 
       setUser(result.user);
-
-      toast.success('Successfully signed in!');
     } catch (error) {
       console.error('Error signing in with email link', error);
       toast.error('Error signing in. Please try again.');
