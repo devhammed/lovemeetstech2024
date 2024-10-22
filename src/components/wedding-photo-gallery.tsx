@@ -12,7 +12,7 @@ import { auth, storage } from '@/lib/firebase'
 
 const appTitle = import.meta.env.VITE_APP_TITLE;
 
-const photosPerPage = parseInt(import.meta.env.VITE_PHOTOS_PER_PAGE, 10);
+const maxResults = parseInt(import.meta.env.VITE_PHOTOS_PER_PAGE, 10);
 
 export function WeddingPhotoGalleryComponent() {
   const [email, setEmail] = useState<string>('')
@@ -127,7 +127,7 @@ export function WeddingPhotoGalleryComponent() {
     try {
       const listRef = ref(storage, 'photos')
 
-      const res = await list(listRef, { maxResults: photosPerPage, pageToken })
+      const res = await list(listRef, { maxResults, pageToken })
 
       const urls = await Promise.all(res.items.map(itemRef => getDownloadURL(itemRef)))
 
