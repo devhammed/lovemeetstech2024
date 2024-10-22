@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, FormEvent, ChangeEvent } from 'react'
 import { User } from 'firebase/auth'
 import { sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink } from 'firebase/auth'
-import { ref, listAll, getDownloadURL, uploadBytes } from 'firebase/storage'
+import { ref, list, getDownloadURL, uploadBytes } from 'firebase/storage'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
@@ -9,6 +9,8 @@ import { Toaster, toast } from 'react-hot-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Heart, Upload } from 'lucide-react'
 import { auth, storage } from '@/lib/firebase'
+
+const appTitle = import.meta.env.VITE_APP_TITLE;
 
 const photosPerPage = parseInt(import.meta.env.VITE_PHOTOS_PER_PAGE, 10);
 
@@ -19,7 +21,7 @@ export function WeddingPhotoGalleryComponent() {
   const [loading, setLoading] = useState<boolean>(false)
   const [sendingSignInLink, setSendingSignInLink] = useState<boolean>(false)
   const [hasMore, setHasMore] = useState<boolean>(true)
-  const [lastVisible, setLastVisible] = useState<string|null>(null)
+  const [pageToken, setPageToken] = useState<string|undefined>();
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [modalEmail, setModalEmail] = useState<string>('')
   const observer = useRef<IntersectionObserver>()
@@ -34,7 +36,7 @@ export function WeddingPhotoGalleryComponent() {
 
     observer.current = new IntersectionObserver(async entries => {
       if (entries[0].isIntersecting && hasMore) {
-        fetchMorePhotos().catch(error => {
+        fetchPhotos().catch(error => {
           console.error('Error fetching photos', error)
           toast.error('Error fetching photos. Please try again.')
         });
@@ -42,7 +44,7 @@ export function WeddingPhotoGalleryComponent() {
     })
 
     if (node) {
-      observer.current.observe(node)
+      observer.current.observe(node);
     }
   }, [loading, hasMore]);
 
@@ -117,44 +119,19 @@ export function WeddingPhotoGalleryComponent() {
 
     try {
       const listRef = ref(storage, 'photos')
-      const res = await listAll(listRef)
-      const sortedItems = res.items.sort((a, b) => b.name.localeCompare(a.name))
-      const batch = sortedItems.slice(0, photosPerPage)
-      const urls = await Promise.all(batch.map(itemRef => getDownloadURL(itemRef)))
-      const lastItem = batch[batch.length - 1];
-      setPhotos(urls)
-      setLastVisible(lastItem?.name)
-      setHasMore(sortedItems.length > photosPerPage)
+
+      const res = await list(listRef, { maxResults: photosPerPage, pageToken })
+
+      const urls = await Promise.all(res.items.map(itemRef => getDownloadURL(itemRef)))
+
+      setPhotos((prevPhotos) => pageToken ? [...prevPhotos, ...urls] : urls)
+
+      setPageToken(res.nextPageToken)
+
+      setHasMore(!!res.nextPageToken);
     } catch (error) {
       console.error('Error fetching photos', error)
       toast.error('Error fetching photos. Please try again.')
-    }
-
-    setLoading(false)
-  }
-
-  const fetchMorePhotos = async () => {
-    if (loading || !hasMore) {
-      return
-    }
-
-    setLoading(true)
-
-    try {
-      const listRef = ref(storage, 'photos')
-      const res = await listAll(listRef)
-      const sortedItems = res.items.sort((a, b) => b.name.localeCompare(a.name))
-      const startIndex = sortedItems.findIndex(item => item.name === lastVisible) + 1
-      const batch = sortedItems.slice(startIndex, startIndex + photosPerPage)
-      const urls = await Promise.all(batch.map(itemRef => getDownloadURL(itemRef)))
-      const lastItem = batch[batch.length - 1];
-
-      setLastVisible(lastItem?.name)
-      setPhotos(prevPhotos => [...prevPhotos, ...urls])
-      setHasMore(startIndex + photosPerPage < sortedItems.length)
-    } catch (error) {
-      console.error('Error fetching more photos', error)
-      toast.error('Error fetching more photos. Please try again.')
     }
 
     setLoading(false)
@@ -170,7 +147,9 @@ export function WeddingPhotoGalleryComponent() {
         error: 'Error uploading image. Please try again.'
       });
 
-      await fetchPhotos();
+      const url = await getDownloadURL(storageRef);
+
+      setPhotos((prevPhotos) => [url, ...prevPhotos]);
     } catch (error) {
       console.error('Error uploading image', error);
       toast.error('Error uploading image. Please try again.')
@@ -180,9 +159,11 @@ export function WeddingPhotoGalleryComponent() {
   const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files![0];
 
-    if (file) {
-      await uploadImage(file);
+    if (!file) {
+        return;
     }
+
+    await uploadImage(file);
   }
 
   const handleModalSubmit = async  (e: FormEvent) => {
@@ -200,25 +181,37 @@ export function WeddingPhotoGalleryComponent() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-100 to-white flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-blue-100 to-white flex items-center justify-center p-4">
         <Card className="w-full max-w-md mx-auto backdrop-blur-sm bg-white/30 border border-blue-200 shadow-lg">
           <CardContent className="p-6">
-            <h2 className="text-3xl font-bold mb-6 text-center text-blue-800">Wedding Photo Gallery</h2>
+            <h2 className="text-2xl font-bold mb-6 text-center text-blue-800 md:text-3xl">
+              {appTitle}
+            </h2>
+
+            <p className="text-center text-blue-600 mb-6">
+              Share your royal moments with us! 📸
+            </p>
+
             <form onSubmit={sendSignInLink} className="space-y-4">
               <Input
-                type="email"
-                placeholder="Enter your email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="bg-white/50 border-blue-300 focus:border-blue-500 focus:ring-blue-500"
+                  type="email"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="bg-white/50 border-blue-300 focus:border-blue-500 focus:ring-blue-500"
               />
-              <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white" disabled={sendingSignInLink}>
+              <Button
+                  type="submit"
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                  disabled={sendingSignInLink}
+              >
                 {sendingSignInLink ? 'Sending...' : ' Send Sign-In Link'}
               </Button>
             </form>
           </CardContent>
         </Card>
+
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
           <DialogContent className="bg-white/80 backdrop-blur-md border border-blue-200">
             <DialogHeader>
@@ -242,16 +235,17 @@ export function WeddingPhotoGalleryComponent() {
             </form>
           </DialogContent>
         </Dialog>
+
         <Toaster position="bottom-center"/>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-100 to-white p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-100 to-white p-6">
       <div className="container mx-auto">
-        <h1 className="text-4xl font-bold mb-6 text-center text-blue-800 font-serif">
-          #LoveMeetsTech2024
+        <h1 className="text-2xl font-bold mb-6 text-center text-blue-800 font-serif md:text-4xl">
+          {appTitle}
         </h1>
 
         <p className="text-center text-blue-600 mb-6">
