@@ -27,11 +27,11 @@ export function WeddingPhotoGalleryComponent() {
   const observer = useRef<IntersectionObserver>()
   const lastPhotoElementRef = useCallback((node: HTMLDivElement) => {
     if (loading) {
-      return
+      return;
     }
 
     if (observer.current) {
-      observer.current.disconnect()
+      observer.current.disconnect();
     }
 
     observer.current = new IntersectionObserver(async entries => {
@@ -41,7 +41,7 @@ export function WeddingPhotoGalleryComponent() {
           toast.error('Error fetching photos. Please try again.')
         });
       }
-    })
+    });
 
     if (node) {
       observer.current.observe(node);
