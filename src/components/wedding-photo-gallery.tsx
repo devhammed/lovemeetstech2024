@@ -121,8 +121,9 @@ export function WeddingPhotoGalleryComponent() {
       const sortedItems = res.items.sort((a, b) => b.name.localeCompare(a.name))
       const batch = sortedItems.slice(0, photosPerPage)
       const urls = await Promise.all(batch.map(itemRef => getDownloadURL(itemRef)))
+      const lastItem = batch[batch.length - 1];
       setPhotos(urls)
-      setLastVisible(batch[batch.length - 1].name)
+      setLastVisible(lastItem?.name)
       setHasMore(sortedItems.length > photosPerPage)
     } catch (error) {
       console.error('Error fetching photos', error)
@@ -146,11 +147,10 @@ export function WeddingPhotoGalleryComponent() {
       const startIndex = sortedItems.findIndex(item => item.name === lastVisible) + 1
       const batch = sortedItems.slice(startIndex, startIndex + photosPerPage)
       const urls = await Promise.all(batch.map(itemRef => getDownloadURL(itemRef)))
+      const lastItem = batch[batch.length - 1];
 
+      setLastVisible(lastItem?.name)
       setPhotos(prevPhotos => [...prevPhotos, ...urls])
-
-      setLastVisible(batch[batch.length - 1].name)
-
       setHasMore(startIndex + photosPerPage < sortedItems.length)
     } catch (error) {
       console.error('Error fetching more photos', error)
