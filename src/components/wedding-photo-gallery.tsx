@@ -297,9 +297,16 @@ export function WeddingPhotoGalleryComponent() {
         </div>
 
         {loading && (
-          <p className="text-center mt-4 text-blue-600">Loading more royal moments...</p>
+            <p className="text-center mt-4 text-blue-600">
+              {photos.length > 0 ? 'Loading more royal moments...' : 'Loading royal moments...'}
+            </p>
         )}
-        {!hasMore && (
+
+        {!loading && photos.length === 0 && (
+          <p className="text-center mt-4 text-blue-600">No royal moments shared yet. Be the first! 🥰</p>
+        )}
+
+        {!loading && !hasMore && photos.length > 0 && (
           <p className="text-center mt-4 text-blue-600">You've seen all the regal love 👑❤️</p>
         )}
       </div>
