@@ -162,8 +162,8 @@ export function WeddingPhotoGalleryComponent() {
       return;
     }
 
-    if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
-      toast.error('Invalid file type. Please upload an image or video file.');
+    if (!file.type.startsWith('image/')) {
+      toast.error('Invalid file type. Please upload an image file.');
       return;
     }
 
@@ -352,7 +352,7 @@ export function WeddingPhotoGalleryComponent() {
               className="bg-blue-600 hover:bg-blue-700 text-white flex items-center"
           >
             <Camera className="mr-1 h-4 w-4"/>
-            <span>Capture Media</span>
+            <span>Capture Photo</span>
           </Button>
 
           <Button
@@ -360,13 +360,13 @@ export function WeddingPhotoGalleryComponent() {
               className="bg-blue-600 hover:bg-blue-700 text-white flex items-center"
           >
             <Upload className="mr-1 h-4 w-4"/>
-            <span>Upload Media</span>
+            <span>Upload Photo</span>
           </Button>
 
           <input
               type="file"
               capture="user"
-              accept="image/*, video/*"
+              accept="image/*"
               className="sr-only"
               ref={captureRef}
               onChange={handleFileUpload}
@@ -374,7 +374,7 @@ export function WeddingPhotoGalleryComponent() {
 
           <input
               type="file"
-              accept="image/*, video/*"
+              accept="image/*"
               className="sr-only"
               ref={uploadRef}
               onChange={handleFileUpload}
