@@ -1,14 +1,16 @@
-import { useState, useEffect, useRef, useCallback, FormEvent, ChangeEvent } from 'react'
-import { User } from 'firebase/auth'
-import { sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink } from 'firebase/auth'
-import { ref, list, getDownloadURL, getBlob, uploadBytes, StorageReference } from 'firebase/storage'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Card, CardContent } from '@/components/ui/card'
-import { Toaster, toast } from 'react-hot-toast'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
-import {Download, Upload} from 'lucide-react'
-import { auth, storage } from '@/lib/firebase'
+import { useState, useEffect, useRef, useCallback, FormEvent, ChangeEvent } from 'react';
+import { User } from 'firebase/auth';
+import { sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink } from 'firebase/auth';
+import { ref, list, getDownloadURL, getBlob, uploadBytes, StorageReference } from 'firebase/storage';
+import { logEvent } from 'firebase/analytics';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent } from '@/components/ui/card';
+import { Toaster, toast } from 'react-hot-toast';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Download, Upload, Camera } from 'lucide-react';
+import { analytics, auth, storage } from '@/lib/firebase';
+
 const appTitle = import.meta.env.VITE_APP_TITLE;
 
 const maxResults = parseInt(import.meta.env.VITE_PHOTOS_PER_PAGE, 10);
@@ -38,6 +40,10 @@ export function WeddingPhotoGalleryComponent() {
 
   const [modalEmail, setModalEmail] = useState<string>('');
 
+  const captureRef = useRef<HTMLInputElement>(null);
+
+  const uploadRef = useRef<HTMLInputElement>(null);
+
   const observer = useRef<IntersectionObserver>();
 
   const completeSignIn = useCallback(async (email: string) => {
@@ -53,8 +59,11 @@ export function WeddingPhotoGalleryComponent() {
       window.history.replaceState({}, document.title, window.location.pathname);
 
       setUser(result.user);
+
+      logEvent(analytics, 'login', { email });
     } catch (error) {
-      console.error('Error signing in with email link', error);
+      logEvent(analytics, 'exception', { error, description: 'Error signing in' });
+
       toast.error('Error signing in. Please try again.');
     }
   }, [setUser]);
@@ -70,11 +79,14 @@ export function WeddingPhotoGalleryComponent() {
         handleCodeInApp: true,
       });
 
+      logEvent(analytics, 'email_sign_in', { email });
+
       window.localStorage.setItem('emailForSignIn', email);
 
       toast.success('Sign-in link sent to your email!');
     } catch (error) {
-      console.error('Error sending sign-in link', error);
+      logEvent(analytics, 'exception', { error, description: 'Error sending sign-in link' });
+
       toast.error('Error sending sign-in link. Please try again.');
     }
 
@@ -101,18 +113,21 @@ export function WeddingPhotoGalleryComponent() {
         });
       }));
 
+      logEvent(analytics, 'fetch_photos', { user: user?.uid, count: items.length, pageToken });
+
       setPhotos((prevPhotos) => pageToken ? [...prevPhotos, ...items] : items);
 
       setPageToken(res.nextPageToken);
 
       setHasMore(!!res.nextPageToken);
     } catch (error) {
-      console.error('Error fetching photos', error);
+      logEvent(analytics, 'exception', { error, description: 'Error fetching photos', user: user?.uid });
+
       toast.error('Error fetching photos. Please try again.');
     }
 
     setLoading(false);
-  }, [pageToken, setPhotos, setPageToken, setHasMore, setLoading]);
+  }, [user, pageToken, setPhotos, setPageToken, setHasMore, setLoading]);
 
   const uploadImage = useCallback(async (file: File) => {
     try {
@@ -129,11 +144,14 @@ export function WeddingPhotoGalleryComponent() {
       const url = await getDownloadURL(storageRef);
 
       setPhotos((prevPhotos) => [{url, name, storageRef}, ...prevPhotos]);
+
+      logEvent(analytics, 'upload_image', { user: user?.uid, name, url });
     } catch (error) {
-      console.error('Error uploading image', error);
+      logEvent(analytics, 'exception', { error, description: 'Error uploading image', user: user?.uid });
+
       toast.error('Error uploading image. Please try again.');
     }
-  }, [setPhotos]);
+  }, [setPhotos, user]);
 
   const handleFileUpload = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files![0];
@@ -149,35 +167,39 @@ export function WeddingPhotoGalleryComponent() {
     e.preventDefault();
 
     completeSignIn(modalEmail).catch(error => {
-        console.error('Error completing sign-in', error);
-        toast.error('Error completing sign-in. Please try again.');
+      logEvent(analytics, 'exception', { error, description: 'Error completing sign-in', user: user?.uid });
+
+      toast.error('Error completing sign-in. Please try again.');
     });
 
     setIsModalOpen(false);
-  }, [completeSignIn, modalEmail]);
+  }, [user, completeSignIn, modalEmail]);
 
   const handleDownload = useCallback(async (photo: PhotoItem) => {
     try {
-      const blob = await toast.promise(getBlob(photo.storageRef), {
-        loading: 'Downloading image...',
-        success: 'Image downloaded successfully!',
-        error: 'Error downloading image. Please try again.'
-      });
+        const blob = await toast.promise(getBlob(photo.storageRef), {
+            loading: 'Downloading image...',
+            success: 'Image downloaded successfully!',
+            error: 'Error downloading image. Please try again.'
+        });
 
-      const blobUrl = URL.createObjectURL(blob);
+        const blobUrl = URL.createObjectURL(blob);
 
-      const a = document.createElement('a');
+        const a = document.createElement('a');
 
-      a.href = blobUrl;
+        a.href = blobUrl;
 
-      a.download = photo.name;
+        a.download = photo.name;
 
-      a.click();
+        a.click();
+
+        logEvent(analytics, 'download_image', { user: user?.uid, name: photo.name });
     } catch (error) {
-      console.error('Error downloading image', error);
-      toast.error('Error downloading image. Please try again.');
+        logEvent(analytics, 'exception', { error, description: 'Error downloading image', user: user?.uid });
+
+        toast.error('Error downloading image. Please try again.');
     }
-  }, []);
+  }, [user]);
 
   const infiniteScrollRef = useCallback((node: HTMLDivElement) => {
     if (loading) {
@@ -191,7 +213,8 @@ export function WeddingPhotoGalleryComponent() {
     observer.current = new IntersectionObserver(async entries => {
       if (entries[0].isIntersecting && hasMore) {
         fetchPhotos().catch(error => {
-          console.error('Error fetching photos', error)
+          logEvent(analytics, 'exception', { error, description: 'Error fetching photos' });
+
           toast.error('Error fetching photos. Please try again.')
         });
       }
@@ -210,7 +233,8 @@ export function WeddingPhotoGalleryComponent() {
         setIsModalOpen(true);
       } else {
          completeSignIn(email).catch(error => {
-            console.error('Error completing sign-in', error);
+            logEvent(analytics, 'exception', { description: 'Error completing sign-in', error });
+
             toast.error('Error completing sign-in. Please try again.');
          });
       }
@@ -224,10 +248,13 @@ export function WeddingPhotoGalleryComponent() {
 
     if (user) {
       fetchPhotos().catch(error => {
-        console.error('Error fetching photos', error);
+        logEvent(analytics, 'exception', { error, description: 'Error fetching photos' });
+
         toast.error('Error fetching photos. Please try again.');
       });
     }
+
+    logEvent(analytics, 'page_view', { user: user?.uid });
 
     return authStateSubscription;
   }, [fetchPhotos, user]);
@@ -307,27 +334,44 @@ export function WeddingPhotoGalleryComponent() {
 
         <div className="mb-6 flex justify-center space-x-4">
           <Button
-            onClick={() => document.getElementById('fileInput')!.click()}
-            className="bg-blue-600 hover:bg-blue-700 text-white flex items-center"
+              onClick={() => captureRef.current?.click()}
+              className="bg-blue-600 hover:bg-blue-700 text-white flex items-center"
           >
-            <Upload className="mr-2 h-4 w-4" /> Upload Image
+            <Camera className="mr-1 h-4 w-4"/>
+            <span>Capture Image</span>
+          </Button>
+
+          <Button
+              onClick={() => uploadRef.current?.click()}
+              className="bg-blue-600 hover:bg-blue-700 text-white flex items-center"
+          >
+            <Upload className="mr-1 h-4 w-4"/>
+            <span>Upload Image</span>
           </Button>
 
           <input
-            id="fileInput"
-            type="file"
-            capture="user"
-            accept="image/*"
-            className="sr-only"
-            onChange={handleFileUpload}
+              type="file"
+              capture="user"
+              accept="image/*"
+              className="sr-only"
+              ref={captureRef}
+              onChange={handleFileUpload}
+          />
+
+          <input
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              ref={uploadRef}
+              onChange={handleFileUpload}
           />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {photos.map((photo) => (
-            <div
-              key={photo.name}
-              className="relative group overflow-hidden rounded-lg shadow-lg transition-transform duration-300 ease-in-out hover:scale-105"
+              <div
+                  key={photo.name}
+                  className="relative group overflow-hidden rounded-lg shadow-lg transition-transform duration-300 ease-in-out hover:scale-105"
             >
               <img
                 src={photo.url}
