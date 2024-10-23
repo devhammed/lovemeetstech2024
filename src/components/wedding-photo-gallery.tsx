@@ -13,6 +13,8 @@ import { analytics, auth, storage } from '@/lib/firebase';
 
 const appTitle = import.meta.env.VITE_APP_TITLE;
 
+const maxUploadSize = parseInt(import.meta.env.VITE_MAX_FILE_SIZE, 10);
+
 const maxResults = parseInt(import.meta.env.VITE_PHOTOS_PER_PAGE, 10);
 
 interface PhotoItem {
@@ -62,9 +64,9 @@ export function WeddingPhotoGalleryComponent() {
 
       logEvent(analytics, 'login', { email });
     } catch (error) {
-      logEvent(analytics, 'exception', { error, description: 'Error signing in' });
-
       toast.error('Error signing in. Please try again.');
+
+      logEvent(analytics, 'exception', { error, description: 'Error signing in' });
     }
   }, [setUser]);
 
@@ -85,9 +87,9 @@ export function WeddingPhotoGalleryComponent() {
 
       toast.success('Sign-in link sent to your email!');
     } catch (error) {
-      logEvent(analytics, 'exception', { error, description: 'Error sending sign-in link' });
-
       toast.error('Error sending sign-in link. Please try again.');
+
+      logEvent(analytics, 'exception', { error, description: 'Error sending sign-in link' });
     }
 
     setSendingSignInLink(false);
@@ -121,15 +123,15 @@ export function WeddingPhotoGalleryComponent() {
 
       setHasMore(!!res.nextPageToken);
     } catch (error) {
-      logEvent(analytics, 'exception', { error, description: 'Error fetching photos', user: user?.uid });
-
       toast.error('Error fetching photos. Please try again.');
+
+      logEvent(analytics, 'exception', { error, description: 'Error fetching photos', user: user?.uid });
     }
 
     setLoading(false);
   }, [user, pageToken, setPhotos, setPageToken, setHasMore, setLoading]);
 
-  const uploadImage = useCallback(async (file: File) => {
+  const uploadMedia = useCallback(async (file: File) => {
     try {
       const name = `${Date.now()}_${file.name}`;
 
@@ -147,9 +149,9 @@ export function WeddingPhotoGalleryComponent() {
 
       logEvent(analytics, 'upload_image', { user: user?.uid, name, url });
     } catch (error) {
-      logEvent(analytics, 'exception', { error, description: 'Error uploading image', user: user?.uid });
-
       toast.error('Error uploading image. Please try again.');
+
+      logEvent(analytics, 'exception', { error, description: 'Error uploading image', user: user?.uid });
     }
   }, [setPhotos, user]);
 
@@ -160,16 +162,28 @@ export function WeddingPhotoGalleryComponent() {
       return;
     }
 
-    await uploadImage(file);
-  }, [uploadImage]);
+    if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+      toast.error('Invalid file type. Please upload an image or video file.');
+      return;
+    }
+
+    if (file.size > (maxUploadSize * 1024 * 1024)) {
+      toast.error(`File size exceeds ${maxUploadSize}MB limit. Please upload a smaller file.`);
+      return;
+    }
+
+    await uploadMedia(file);
+
+    e.target.value = '';
+  }, [uploadMedia]);
 
   const handleModalSubmit = useCallback(async  (e: FormEvent) => {
     e.preventDefault();
 
     completeSignIn(modalEmail).catch(error => {
-      logEvent(analytics, 'exception', { error, description: 'Error completing sign-in', user: user?.uid });
-
       toast.error('Error completing sign-in. Please try again.');
+
+      logEvent(analytics, 'exception', { error, description: 'Error completing sign-in', user: user?.uid });
     });
 
     setIsModalOpen(false);
@@ -195,9 +209,9 @@ export function WeddingPhotoGalleryComponent() {
 
         logEvent(analytics, 'download_image', { user: user?.uid, name: photo.name });
     } catch (error) {
-        logEvent(analytics, 'exception', { error, description: 'Error downloading image', user: user?.uid });
-
         toast.error('Error downloading image. Please try again.');
+
+        logEvent(analytics, 'exception', { error, description: 'Error downloading image', user: user?.uid });
     }
   }, [user]);
 
@@ -213,9 +227,9 @@ export function WeddingPhotoGalleryComponent() {
     observer.current = new IntersectionObserver(async entries => {
       if (entries[0].isIntersecting && hasMore) {
         fetchPhotos().catch(error => {
-          logEvent(analytics, 'exception', { error, description: 'Error fetching photos' });
-
           toast.error('Error fetching photos. Please try again.')
+
+          logEvent(analytics, 'exception', { error, description: 'Error fetching photos' });
         });
       }
     });
@@ -233,9 +247,9 @@ export function WeddingPhotoGalleryComponent() {
         setIsModalOpen(true);
       } else {
          completeSignIn(email).catch(error => {
-            logEvent(analytics, 'exception', { description: 'Error completing sign-in', error });
+           toast.error('Error completing sign-in. Please try again.');
 
-            toast.error('Error completing sign-in. Please try again.');
+            logEvent(analytics, 'exception', { description: 'Error completing sign-in', error });
          });
       }
     }
@@ -248,9 +262,9 @@ export function WeddingPhotoGalleryComponent() {
 
     if (user) {
       fetchPhotos().catch(error => {
-        logEvent(analytics, 'exception', { error, description: 'Error fetching photos' });
-
         toast.error('Error fetching photos. Please try again.');
+
+        logEvent(analytics, 'exception', { error, description: 'Error fetching photos' });
       });
     }
 
@@ -338,7 +352,7 @@ export function WeddingPhotoGalleryComponent() {
               className="bg-blue-600 hover:bg-blue-700 text-white flex items-center"
           >
             <Camera className="mr-1 h-4 w-4"/>
-            <span>Capture Image</span>
+            <span>Capture Media</span>
           </Button>
 
           <Button
@@ -346,13 +360,13 @@ export function WeddingPhotoGalleryComponent() {
               className="bg-blue-600 hover:bg-blue-700 text-white flex items-center"
           >
             <Upload className="mr-1 h-4 w-4"/>
-            <span>Upload Image</span>
+            <span>Upload Media</span>
           </Button>
 
           <input
               type="file"
               capture="user"
-              accept="image/*"
+              accept="image/*, video/*"
               className="sr-only"
               ref={captureRef}
               onChange={handleFileUpload}
@@ -360,7 +374,7 @@ export function WeddingPhotoGalleryComponent() {
 
           <input
               type="file"
-              accept="image/*"
+              accept="image/*, video/*"
               className="sr-only"
               ref={uploadRef}
               onChange={handleFileUpload}
